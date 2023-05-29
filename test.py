@@ -296,16 +296,6 @@ if use_gpu:
     model = model.cuda()
 
 
-print('Here I fuse conv and bn for faster inference, and it does not work for transformers. Comment out this following line if you do not want to fuse conv&bn.')
-model = fuse_all_conv_bn(model)
-
-# We can optionally trace the forward method with PyTorch JIT so it runs faster.
-# To do so, we can call `.trace` on the reparamtrized module with dummy inputs
-# expected by the module.
-# Comment out this following line if you do not want to trace.
-#dummy_forward_input = torch.rand(opt.batchsize, 3, h, w).cuda()
-#model = torch.jit.trace(model, dummy_forward_input)
-
 print(model)
 # Extract feature
 since = time.time()

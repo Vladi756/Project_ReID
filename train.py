@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from __future__ import print_function, division
 
 import argparse
@@ -16,70 +14,40 @@ import matplotlib.pyplot as plt
 import time
 import os
 from model import ft_net, ft_net_dense, ft_net_hr, ft_net_swin, ft_net_swinv2, ft_net_convnext, ft_net_efficient, ft_net_NAS, PCB
-from random_erasing import RandomErasing
-from dgfolder import DGFolder
+# from random_erasing import RandomErasing
+# from dgfolder import DGFolder
 import yaml
 from shutil import copyfile
-from circle_loss import CircleLoss, convert_label_to_similarity
-from instance_loss import InstanceLoss
-from ODFA import ODFA
+# from circle_loss import CircleLoss, convert_label_to_similarity
+# from instance_loss import InstanceLoss
+# from ODFA import ODFA
 version =  torch.__version__
 #fp16
-try:
-    from apex.fp16_utils import *
-    from apex import amp
-    from apex.optimizers import FusedSGD
-except ImportError: # will be 3.x series
-    print('This is not an error. If you want to use low precision, i.e., fp16, please install the apex with cuda support (https://github.com/NVIDIA/apex) and update pytorch to 1.0')
 
-from pytorch_metric_learning import losses, miners #pip install pytorch-metric-learning
+from pytorch_metric_learning import losses, miners 
 
 ######################################################################
 # Options
 # --------
 parser = argparse.ArgumentParser(description='Training')
-parser.add_argument('--gpu_ids',default='0', type=str,help='gpu_ids: e.g. 0  0,1,2  0,2')
-parser.add_argument('--name',default='ft_ResNet50', type=str, help='output model name')
+
+parser.add_argument('--gpu_ids',default='0', type=str)
+parser.add_argument('--name',default='ft_ResNet50', type=str)
 # data
-parser.add_argument('--data_dir',default='../Market/pytorch',type=str, help='training dir path')
-parser.add_argument('--train_all', action='store_true', help='use all training data' )
-parser.add_argument('--batchsize', default=32, type=int, help='batchsize')
-parser.add_argument('--color_jitter', action='store_true', help='use color jitter in training' )
-parser.add_argument('--erasing_p', default=0, type=float, help='Random Erasing probability, in [0,1]')
-parser.add_argument('--DG', action='store_true', help='use extra DG-Market Dataset for training. Please download it from https://github.com/NVlabs/DG-Net#dg-market.' )
+parser.add_argument('--data_dir',default='../Market/pytorch',type=str)
+parser.add_argument('--batchsize', default=32, type=int)
+parser.add_argument('--erasing_p', default=0, type=float)
+
 # optimizer
-parser.add_argument('--lr', default=0.05, type=float, help='learning rate')
-parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay. More Regularization Smaller Weight.')
-parser.add_argument('--total_epoch', default=60, type=int, help='total training epoch')
-parser.add_argument('--fp16', action='store_true', help='use float16 instead of float32, which will save about 50%% memory' )
-parser.add_argument('--cosine', action='store_true', help='use cosine lrRate' )
-parser.add_argument('--FSGD', action='store_true', help='use fused sgd, which will speed up trainig slightly. apex is needed.' )
+parser.add_argument('--lr', default=0.05, type=float)
+parser.add_argument('--weight_decay', default=5e-4, type=float)
+parser.add_argument('--total_epoch', default=60, type=int)
+
 # backbone
-parser.add_argument('--linear_num', default=512, type=int, help='feature dimension: 512 or default or 0 (linear=False)')
-parser.add_argument('--stride', default=2, type=int, help='stride')
-parser.add_argument('--droprate', default=0.5, type=float, help='drop rate')
-parser.add_argument('--use_dense', action='store_true', help='use densenet121' )
-parser.add_argument('--use_swin', action='store_true', help='use swin transformer 224x224' )
-parser.add_argument('--use_swinv2', action='store_true', help='use swin transformerv2' )
-parser.add_argument('--use_efficient', action='store_true', help='use efficientnet-b4' )
-parser.add_argument('--use_NAS', action='store_true', help='use NAS' )
-parser.add_argument('--use_hr', action='store_true', help='use hrNet' )
-parser.add_argument('--use_convnext', action='store_true', help='use ConvNext' )
-parser.add_argument('--ibn', action='store_true', help='use resnet+ibn' )
-parser.add_argument('--PCB', action='store_true', help='use PCB+ResNet50' )
-# loss
-parser.add_argument('--warm_epoch', default=0, type=int, help='the first K epoch that needs warm up')
-parser.add_argument('--arcface', action='store_true', help='use ArcFace loss' )
-parser.add_argument('--circle', action='store_true', help='use Circle loss' )
-parser.add_argument('--cosface', action='store_true', help='use CosFace loss' )
-parser.add_argument('--contrast', action='store_true', help='use contrast loss' )
-parser.add_argument('--instance', action='store_true', help='use instance loss' )
-parser.add_argument('--ins_gamma', default=32, type=int, help='gamma for instance loss')
-parser.add_argument('--triplet', action='store_true', help='use triplet loss' )
-parser.add_argument('--lifted', action='store_true', help='use lifted loss' )
-parser.add_argument('--sphere', action='store_true', help='use sphere loss' )
-parser.add_argument('--adv', default=0.0, type=float, help='use adv loss as 1.0' )
-parser.add_argument('--aiter', default=10, type=float, help='use adv loss with iter' )
+parser.add_argument('--linear_num', default=512, type=int)
+parser.add_argument('--stride', default=2, type=int)
+parser.add_argument('--droprate', default=0.5, type=float)
+
 
 opt = parser.parse_args()
 
@@ -93,11 +61,7 @@ for str_id in str_ids:
     if gid >=0:
         gpu_ids.append(gid)
 opt.gpu_ids = gpu_ids
-# set gpu ids
-if len(gpu_ids)>0:
-    #torch.cuda.set_device(gpu_ids[0])
-    cudnn.enabled = True
-    cudnn.benchmark = True
+
 ######################################################################
 # Load Data
 # ---------
@@ -137,8 +101,6 @@ if opt.PCB:
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ]
 
-if opt.erasing_p>0:
-    transform_train_list = transform_train_list +  [RandomErasing(probability = opt.erasing_p, mean=[0.0, 0.0, 0.0])]
 
 if opt.color_jitter:
     transform_train_list = [transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0)] + transform_train_list
@@ -154,24 +116,23 @@ train_all = ''
 if opt.train_all:
      train_all = '_all'
 
+
+
+# Empty dictionary to store the datasets for training and validation
 image_datasets = {}
+
+# ImageFolder takes training data and applies 'train' transformation to it
 image_datasets['train'] = datasets.ImageFolder(os.path.join(data_dir, 'train' + train_all),
                                           data_transforms['train'])
+# ImageFolder takes validation data and applies 'val' transformation to it
 image_datasets['val'] = datasets.ImageFolder(os.path.join(data_dir, 'val'),
                                           data_transforms['val'])
-
+# store dataloaders for training & validation
 dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=opt.batchsize,
                                              shuffle=True, num_workers=2, pin_memory=True,
-                                             prefetch_factor=2, persistent_workers=True) # 8 workers may work faster
+                                             prefetch_factor=2, persistent_workers=True) 
               for x in ['train', 'val']}
 
-# Use extra DG-Market Dataset for training. Please download it from https://github.com/NVlabs/DG-Net#dg-market.
-if opt.DG:
-    image_datasets['DG'] = DGFolder(os.path.join('../DG-Market' ),
-                                          data_transforms['train'])
-    dataloaders['DG'] = torch.utils.data.DataLoader(image_datasets['DG'], batch_size = max(8, opt.batchsize//2),
-                                             shuffle=True, num_workers=2, pin_memory=True)
-    DGloader_iter = enumerate(dataloaders['DG'])
 
 dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
 class_names = image_datasets['train'].classes
@@ -181,20 +142,9 @@ use_gpu = torch.cuda.is_available()
 since = time.time()
 inputs, classes = next(iter(dataloaders['train']))
 print(time.time()-since)
-######################################################################
-# Training the model
-# ------------------
-#
-# Now, let's write a general function to train a model. Here, we will
-# illustrate:
-#
-# -  Scheduling the learning rate
-# -  Saving the best model
-#
-# In the following, parameter ``scheduler`` is an LR scheduler object from
-# ``torch.optim.lr_scheduler``.
 
-y_loss = {} # loss history
+
+y_loss = {} 
 y_loss['train'] = []
 y_loss['val'] = []
 y_err = {}
@@ -210,8 +160,6 @@ def fliplr(img):
 def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     since = time.time()
 
-    #best_model_wts = model.state_dict()
-    #best_acc = 0.0
     warm_up = 0.1 # We start from the 0.1*lrRate
     warm_iteration = round(dataset_sizes['train']/opt.batchsize)*opt.warm_epoch # first 5 epoch
     if opt.arcface:
@@ -244,39 +192,39 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
 
             running_loss = 0.0
             running_corrects = 0.0
-            # Iterate over data.
+
+
+            # Iterate over the batches of data.
             for iter, data in enumerate(dataloaders[phase]):
-                # get the inputs
+                # unpack data into two variables
                 inputs, labels = data
+
+                # current batch size, channel, height, and width of the input image
                 now_batch_size,c,h,w = inputs.shape
-                if now_batch_size<opt.batchsize: # skip the last batch
+                # skip the last batch
+                if now_batch_size<opt.batchsize: 
                     continue
-                #print(inputs.shape)
-                # wrap them in Variable
+
+                # move input and lables tensors to GPU memory
                 if use_gpu:
                     inputs = Variable(inputs.cuda().detach())
                     labels = Variable(labels.cuda().detach())
                 else:
                     inputs, labels = Variable(inputs), Variable(labels)
-                # if we use low precision, input also need to be fp16
-                #if fp16:
-                #    inputs = inputs.half()
  
-                # zero the parameter gradients
+                # clear the gradient of optimized parameters
                 optimizer.zero_grad()
 
-                # forward
+                # if in the validation phase
                 if phase == 'val':
+                    # gradients not needed for evaluation - disable for efficiency
                     with torch.no_grad():
+                        # passing inputs tensor through the model - forward pass
                         outputs = model(inputs)
+                # testing phase 
                 else:
                     outputs = model(inputs)
 
-
-
-                if opt.adv>0 and iter%opt.aiter==0: 
-                    inputs_adv = ODFA(model, inputs)
-                    outputs_adv = model(inputs_adv)
 
                 sm = nn.Softmax(dim=1)
                 log_sm = nn.LogSoftmax(dim=1)
@@ -287,15 +235,10 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                     ff = ff.div(fnorm.expand_as(ff))
                     loss = criterion(logits, labels) 
                     _, preds = torch.max(logits.data, 1)
-                    if opt.adv>0  and iter%opt.aiter==0:
-                        logits_adv, _ = outputs_adv
-                        loss += opt.adv * criterion(logits_adv, labels)
                     if opt.arcface:
                         loss +=  criterion_arcface(ff, labels)/now_batch_size
                     if opt.cosface:
                         loss +=  criterion_cosface(ff, labels)/now_batch_size
-                    if opt.circle:
-                        loss +=  criterion_circle(*convert_label_to_similarity( ff, labels))/now_batch_size
                     if opt.triplet:
                         hard_pairs = miner(ff, labels)
                         loss +=  criterion_triplet(ff, labels, hard_pairs) #/now_batch_size
@@ -322,46 +265,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 else:  #  norm
                     _, preds = torch.max(outputs.data, 1)
                     loss = criterion(outputs, labels)
-                    if opt.adv>0 and iter%opt.aiter==0:
-                        loss += opt.adv * criterion(outputs_adv, labels)
 
                 del inputs
-                # use extra DG Dataset (https://github.com/NVlabs/DG-Net#dg-market)
-                if opt.DG and phase == 'train' and epoch > num_epochs*0.1:
-                    try:
-                        _, batch = DGloader_iter.__next__()
-                    except StopIteration: 
-                        DGloader_iter = enumerate(dataloaders['DG'])
-                        _, batch = DGloader_iter.__next__()
-                    except UnboundLocalError:  # first iteration
-                        DGloader_iter = enumerate(dataloaders['DG'])
-                        _, batch = DGloader_iter.__next__()
-                        
-                    inputs1, inputs2, _ = batch
-                    inputs1 = inputs1.cuda().detach()
-                    inputs2 = inputs2.cuda().detach()
-                    # use memory in vivo loss (https://arxiv.org/abs/1912.11164)
-                    outputs1 = model(inputs1)
-                    if return_feature:
-                        outputs1, _ = outputs1
-                    elif opt.PCB:
-                        for i in range(num_part):
-                            part[i] = outputs1[i]
-                        outputs1 = part[0] + part[1] + part[2] + part[3] + part[4] + part[5]
-                    outputs2 = model(inputs2)
-                    if return_feature:
-                        outputs2, _ = outputs2
-                    elif opt.PCB:
-                        for i in range(num_part):
-                            part[i] = outputs2[i]
-                        outputs2 = part[0] + part[1] + part[2] + part[3] + part[4] + part[5]
 
-                    mean_pred = sm(outputs1 + outputs2)
-                    kl_loss = nn.KLDivLoss(size_average=False)
-                    reg= (kl_loss(log_sm(outputs2) , mean_pred)  + kl_loss(log_sm(outputs1) , mean_pred))/2
-                    loss += 0.01*reg
-                    del inputs1, inputs2
-                    #print(0.01*reg)
                 # backward + optimize only if in training phase
                 if epoch<opt.warm_epoch and phase == 'train': 
                     warm_up = min(1.0, warm_up + 0.9 / warm_iteration)
@@ -568,10 +474,6 @@ with open('%s/opts.yaml'%dir_name,'w') as fp:
 
 criterion = nn.CrossEntropyLoss()
 
-if fp16:
-    #model = network_to_half(model)
-    #optimizer_ft = FP16_Optimizer(optimizer_ft, static_loss_scale = 128.0)
-    model, optimizer_ft = amp.initialize(model, optimizer_ft, opt_level = "O1")
 
 model = train_model(model, criterion, optimizer_ft, exp_lr_scheduler,
                        num_epochs=opt.total_epoch)
